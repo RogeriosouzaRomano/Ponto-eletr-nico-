@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Ponto Eletrônico</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="container my-5">
+    <h1 class="text-center mb-4">Sistema de Ponto Eletrônico</h1>
+
+    <!-- Botões de Registro -->
+    <div class="mb-3 text-center">
+        <button id="btnEntrada" class="btn btn-primary" onclick="registrarPonto('entrada')">Registrar Entrada</button>
+        <button id="btnEntradaAlmoco" class="btn btn-warning d-none" onclick="registrarPonto('entradaAlmoco')">Entrada Almoço</button>
+        <button id="btnSaidaAlmoco" class="btn btn-success d-none" onclick="registrarPonto('saidaAlmoco')">Saída Almoço</button>
+        <button id="btnSaida" class="btn btn-danger d-none" onclick="registrarPonto('saida')">Registrar Saída</button>
+    </div>
+
+    <!-- Botão para Calcular Horas Trabalhadas -->
+    <div class="text-center mb-4">
+        <button class="btn btn-info" onclick="calcularHorasTrabalhadas()">Calcular Horas Trabalhadas</button>
+    </div>
+
+    <!-- Botões para Visualização e PDF -->
+    <div class="text-center mb-4">
+        <button class="btn btn-secondary" onclick="visualizarMes()">Visualizar Mês</button>
+        <button class="btn btn-dark" onclick="salvarComoPDF()">Salvar em PDF</button>
+    </div>
+
+    <!-- Exibição de Registros -->
+    <h2>Registros por Mês</h2>
+    <div id="registros" class="mt-4"></div>
+
+    <!-- Contêiner de Visualização do Mês -->
+    
+    <div id="visualizacaoMes" class="mt-4 border p-3"></h2></div>
+
+    <script>
+        const CARGA_HORARIA_SEMANAL = 44;
+
+        function registrarPonto(tipo) {
+            const registrosMensais = JSON.parse(localStorage.getItem('registrosMensais')) || {};
+            const hoje = new Date();
+            const mesAno = `${hoje.getMonth() + 1}-${hoje.getFullYear()}`;
+            const dia = hoje.getDate();
+            
+            if (!registrosMensais[mesAno]) registrosMensais[mesAno] = {};
+            if (!registrosMensais[mesAno][dia]) registrosMensais[mesAno][dia] = [];
+            
+            const jaRegistrado = registrosMensais[mesAno][dia].some(reg => reg.tipo === tipo);
+            if (jaRegistrado) return alert(`Ponto de ${tipo} já registrado para hoje!`);
+
+            const tiposRegistrados = registrosMensais[mesAno][dia].map(reg => reg.tipo);
+            if (tipo === 'saida' && (!tiposRegistrados.includes('entradaAlmoco') || !tiposRegistrados.includes('saidaAlmoco'))) {
+                return alert('Você precisa registrar a entrada e a saída do almoço antes de registrar a saída!');
+            }
+
+            const registro = {
+                tipo: tipo,
+                horario: hoje.toISOString()
+            };
+
+            registrosMensais[mesAno][dia].push(registro);
+            localStorage.setItem('registrosMensais', JSON.stringify(registrosMensais));
+
+            atualizarRegistros();
+            verificarBotoes();
+        }
+
+        function atualizarRegistros() {
+            const registrosMensais = JSON.parse(localStorage.getItem('registrosMensais')) || {};
+            const container = document.getElementById('registros');
+            container.innerHTML = '';
+
+            Object.keys(registrosMensais).forEach(mesAno => {
+                const dias = registrosMensais[mesAno];
+                const mesDiv = document.createElement('div');
+                mesDiv.innerHTML = `<h3 class="mt-3">Mês: ${mesAno}</h3>`;
+                
+                Object.keys(dias).forEach(dia => {
+                    const diaDiv = document.createElement('div');
+                    diaDiv.className = 'dia p-3 mb-2 border';
+                    diaDiv.innerHTML = `
+                        <strong>Dia: ${dia}</strong><br>
+                        ${dias[dia].map(reg => `${reg.tipo}: ${new Date(reg.horario).toLocaleTimeString()}`).join('<br>')}
+                        <br>
+                        <button class="btn btn-danger btn-sm mt-2" onclick="apagarRegistro('${mesAno}', ${dia})">Apagar Registro</button>
+                    `;
+                    mesDiv.appendChild(diaDiv);
+                });
+
+                container.appendChild(mesDiv);
+            });
+        }
+
+        function apagarRegistro(mesAno, dia) {
+            const registrosMensais = JSON.parse(localStorage.getItem('registrosMensais')) || {};
+            
+            if (registrosMensais[mesAno] && registrosMensais[mesAno][dia]) {
+                delete registrosMensais[mesAno][dia];
+
+                if (Object.keys(registrosMensais[mesAno]).length === 0) {
+                    delete registrosMensais[mesAno];
+                }
+
+                localStorage.setItem('registrosMensais', JSON.stringify(registrosMensais));
+                atualizarRegistros();
+                verificarBotoes();
+
+                alert(`Registro do dia ${dia} foi apagado com sucesso!`);
+            } else {
+                alert('Não foi possível encontrar o registro para apagar.');
+            }
+        }
+
+        function calcularHorasTrabalhadas() {
+            const registrosMensais = JSON.parse(localStorage.getItem('registrosMensais')) || {};
+            const hoje = new Date();
+            const mesAno = `${hoje.getMonth() + 1}-${hoje.getFullYear()}`;
+            const dia = hoje.getDate();
+            const registrosHoje = registrosMensais[mesAno] ? registrosMensais[mesAno][dia] || [] : [];
+            let totalHorasDia = 0;
+            let tempoAlmoco = 0;
+            let totalHorasSemana = parseFloat(localStorage.getItem('totalHorasSemana')) || 0;
+
+            for (let i = 0; i < registrosHoje.length; i++) {
+                if (registrosHoje[i].tipo === 'entrada' && registrosHoje[i + 1] && registrosHoje[i + 1].tipo === 'saida') {
+                    const entrada = new Date(registrosHoje[i].horario);
+                    const saida = new Date(registrosHoje[i + 1].horario);
+                    totalHorasDia += (saida - entrada) / (1000 * 60 * 60); 
+                } 
+                
+                if (registrosHoje[i].tipo === 'entradaAlmoco' && registrosHoje[i + 1] && registrosHoje[i + 1].tipo === 'saidaAlmoco') {
+                    const entradaAlmoco = new Date(registrosHoje[i].horario);
+                    const saidaAlmoco = new Date(registrosHoje[i + 1].horario);
+                    tempoAlmoco += (saidaAlmoco - entradaAlmoco) / (1000 * 60 * 60); 
+                }
+            }
+
+            const horasTrabalhadasHoje = totalHorasDia - tempoAlmoco;
+            totalHorasSemana += horasTrabalhadasHoje;
+
+            localStorage.setItem('totalHorasSemana', totalHorasSemana.toFixed(2));
+
+            if (totalHorasSemana < CARGA_HORARIA_SEMANAL) {
+                alert(`Atenção! Você ainda está devendo horas esta semana.\nTotal de horas trabalhadas: ${totalHorasSemana.toFixed(2)} horas.\nHoras restantes para completar a semana: ${(CARGA_HORARIA_SEMANAL - totalHorasSemana).toFixed(2)} horas.`);
+            } else {
+                alert(`Parabéns! Você completou sua carga horária semanal de ${CARGA_HORARIA_SEMANAL} horas.`);
+            }
+
+            atualizarRegistros();
+        }
+
+        function verificarBotoes() {
+            const hoje = new Date();
+            const mesAno = `${hoje.getMonth() + 1}-${hoje.getFullYear()}`;
+            const dia = hoje.getDate();
+            const registrosMensais = JSON.parse(localStorage.getItem('registrosMensais')) || {};
+
+            const registrosHoje = registrosMensais[mesAno] ? registrosMensais[mesAno][dia] || [] : [];
+            const tiposRegistrados = registrosHoje.map(reg => reg.tipo);
+
+            document.getElementById('btnEntrada').classList.toggle('d-none', tiposRegistrados.includes('entrada'));
+            document.getElementById('btnEntradaAlmoco').classList.toggle('d-none', !tiposRegistrados.includes('entrada') || tiposRegistrados.includes('entradaAlmoco'));
+            document.getElementById('btnSaidaAlmoco').classList.toggle('d-none', !tiposRegistrados.includes('entradaAlmoco') || tiposRegistrados.includes('saidaAlmoco'));
+            document.getElementById('btnSaida').classList.toggle('d-none', !tiposRegistrados.includes('saidaAlmoco') || tiposRegistrados.includes('saida'));
+        }
+
+        function visualizarMes() {
+            const registrosMensais = JSON.parse(localStorage.getItem('registrosMensais')) || {};
+            const container = document.getElementById('visualizacaoMes');
+            container.innerHTML = '';
+
+            Object.keys(registrosMensais).forEach(mesAno => {
+                const dias = registrosMensais[mesAno];
+                const mesDiv = document.createElement('div');
+                mesDiv.innerHTML = `<h3 class="mt-3">Mês: ${mesAno}</h3>`;
+
+                Object.keys(dias).forEach(dia => {
+                    const diaDiv = document.createElement('div');
+                    diaDiv.className = 'dia p-3 mb-2 border';
+                    diaDiv.innerHTML = `
+                        <strong>Dia: ${dia}</strong><br>
+                        ${dias[dia].map(reg => `${reg.tipo}: ${new Date(reg.horario).toLocaleTimeString()}`).join('<br>')}
+                    `;
+                    mesDiv.appendChild(diaDiv);
+                });
+
+                container.appendChild(mesDiv);
+            });
+        }
+
+       
+function salvarComoPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const registrosMensais = JSON.parse(localStorage.getItem('registrosMensais')) || {};
+    let yPosition = 20;
+
+    // Cabeçalho da Nota Fiscal
+    doc.setFontSize(16);
+    doc.text("Nota Fiscal de Ponto Eletrônico", 105, yPosition, { align: "center" });
+    yPosition += 10;
+
+    // Dados da Empresa
+    doc.setFontSize(12);
+    doc.text("Empresa London Green Park Style", 10, yPosition);
+    doc.text("CNPJ: 97.542.085/0001-71", 10, yPosition + 5);
+    doc.text("Endereço: Rua César Lates , 1000", 10, yPosition + 10);
+    yPosition += 20;
+
+    // Dados do Funcionário
+    doc.text("Funcionário: Rogério de souza Romano", 10, yPosition);
+    doc.text("ID: 0001", 10, yPosition + 5);
+    yPosition += 15;
+
+    // Tabela de Registros
+    doc.setFontSize(12);
+    doc.text("Registros de Ponto:", 10, yPosition);
+    yPosition += 7;
+
+    // Cabeçalho da Tabela
+    doc.setFontSize(10);
+    doc.text("Data", 10, yPosition);
+    doc.text("Entrada", 40, yPosition);
+    doc.text("Saída", 70, yPosition);
+    doc.text("Entrada Almoço", 100, yPosition);
+    doc.text("Saída Almoço", 140, yPosition);
+    doc.text("Total Horas", 170, yPosition);
+    yPosition += 5;
+    doc.setLineWidth(0.5);
+    doc.line(10, yPosition, 200, yPosition); // Linha abaixo do cabeçalho
+    yPosition += 5;
+
+    // Adicionando Registros
+    Object.keys(registrosMensais).forEach(mesAno => {
+        const dias = registrosMensais[mesAno];
+
+        Object.keys(dias).forEach(dia => {
+            const registros = dias[dia];
+            let entrada = "", saida = "", entradaAlmoco = "", saidaAlmoco = "", totalHoras = 0;
+
+            registros.forEach(reg => {
+                const horario = new Date(reg.horario).toLocaleTimeString();
+                if (reg.tipo === 'entrada') entrada = horario;
+                if (reg.tipo === 'saida') saida = horario;
+                if (reg.tipo === 'entradaAlmoco') entradaAlmoco = horario;
+                if (reg.tipo === 'saidaAlmoco') saidaAlmoco = horario;
+            });
+
+            if (entrada && saida) {
+                const horaEntrada = new Date(`1970-01-01T${entrada}Z`);
+                const horaSaida = new Date(`1970-01-01T${saida}Z`);
+                totalHoras = (horaSaida - horaEntrada) / (1000 * 60 * 60);
+            }
+
+            doc.text(`${dia}/${mesAno}`, 10, yPosition);
+            doc.text(entrada, 40, yPosition);
+            doc.text(saida, 70, yPosition);
+            doc.text(entradaAlmoco, 100, yPosition);
+            doc.text(saidaAlmoco, 140, yPosition);
+            doc.text(totalHoras.toFixed(2), 170, yPosition);
+            yPosition += 7;
+
+            // Evita ultrapassar o final da página
+            if (yPosition > 280) {
+                doc.addPage();
+                yPosition = 20;
+            }
+        });
+    });
+
+    // Rodapé com Total de Horas
+    yPosition += 10;
+    doc.setFontSize(12);
+    doc.text("Total de Horas Trabalhadas: ", 10, yPosition);
+    // Adicione o cálculo do total de horas trabalhadas aqui
+
+    doc.save('nota_fiscal_ponto_eletronico.pdf');
+}
+</script>
+
+</body>
+</html>
