@@ -34,8 +34,7 @@
     <div id="registros" class="mt-4"></div>
 
     <!-- Contêiner de Visualização do Mês -->
-    
-    <div id="visualizacaoMes" class="mt-4 border p-3"></h2></div>
+    <div id="visualizacaoMes" class="mt-4 border p-3"></div>
 
     <script>
         const CARGA_HORARIA_SEMANAL = 44;
@@ -165,122 +164,15 @@
             document.getElementById('btnEntrada').classList.toggle('d-none', tiposRegistrados.includes('entrada'));
             document.getElementById('btnEntradaAlmoco').classList.toggle('d-none', !tiposRegistrados.includes('entrada') || tiposRegistrados.includes('entradaAlmoco'));
             document.getElementById('btnSaidaAlmoco').classList.toggle('d-none', !tiposRegistrados.includes('entradaAlmoco') || tiposRegistrados.includes('saidaAlmoco'));
-            document.getElementById('btnSaida').classList.toggle('d-none', !tiposRegistrados.includes('saidaAlmoco') || tiposRegistrados.includes('saida'));
+            document.getElementById('btnSaida').classList.toggle('d-none', !tiposRegistrados.includes('saidaAlmoco'));
         }
 
-        function visualizarMes() {
-            const registrosMensais = JSON.parse(localStorage.getItem('registrosMensais')) || {};
-            const container = document.getElementById('visualizacaoMes');
-            container.innerHTML = '';
-
-            Object.keys(registrosMensais).forEach(mesAno => {
-                const dias = registrosMensais[mesAno];
-                const mesDiv = document.createElement('div');
-                mesDiv.innerHTML = `<h3 class="mt-3">Mês: ${mesAno}</h3>`;
-
-                Object.keys(dias).forEach(dia => {
-                    const diaDiv = document.createElement('div');
-                    diaDiv.className = 'dia p-3 mb-2 border';
-                    diaDiv.innerHTML = `
-                        <strong>Dia: ${dia}</strong><br>
-                        ${dias[dia].map(reg => `${reg.tipo}: ${new Date(reg.horario).toLocaleTimeString()}`).join('<br>')}
-                    `;
-                    mesDiv.appendChild(diaDiv);
-                });
-
-                container.appendChild(mesDiv);
-            });
+        function inicializarEstado() {
+            atualizarRegistros();
+            verificarBotoes();
         }
 
-       
-function salvarComoPDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    const registrosMensais = JSON.parse(localStorage.getItem('registrosMensais')) || {};
-    let yPosition = 20;
-
-    // Cabeçalho da Nota Fiscal
-    doc.setFontSize(16);
-    doc.text("Nota Fiscal de Ponto Eletrônico", 105, yPosition, { align: "center" });
-    yPosition += 10;
-
-    // Dados da Empresa
-    doc.setFontSize(12);
-    doc.text("Empresa London Green Park Style", 10, yPosition);
-    doc.text("CNPJ: 97.542.085/0001-71", 10, yPosition + 5);
-    doc.text("Endereço: Rua César Lates , 1000", 10, yPosition + 10);
-    yPosition += 20;
-
-    // Dados do Funcionário
-    doc.text("Funcionário: Rogério de souza Romano", 10, yPosition);
-    doc.text("ID: 0001", 10, yPosition + 5);
-    yPosition += 15;
-
-    // Tabela de Registros
-    doc.setFontSize(12);
-    doc.text("Registros de Ponto:", 10, yPosition);
-    yPosition += 7;
-
-    // Cabeçalho da Tabela
-    doc.setFontSize(10);
-    doc.text("Data", 10, yPosition);
-    doc.text("Entrada", 40, yPosition);
-    doc.text("Saída", 70, yPosition);
-    doc.text("Entrada Almoço", 100, yPosition);
-    doc.text("Saída Almoço", 140, yPosition);
-    doc.text("Total Horas", 170, yPosition);
-    yPosition += 5;
-    doc.setLineWidth(0.5);
-    doc.line(10, yPosition, 200, yPosition); // Linha abaixo do cabeçalho
-    yPosition += 5;
-
-    // Adicionando Registros
-    Object.keys(registrosMensais).forEach(mesAno => {
-        const dias = registrosMensais[mesAno];
-
-        Object.keys(dias).forEach(dia => {
-            const registros = dias[dia];
-            let entrada = "", saida = "", entradaAlmoco = "", saidaAlmoco = "", totalHoras = 0;
-
-            registros.forEach(reg => {
-                const horario = new Date(reg.horario).toLocaleTimeString();
-                if (reg.tipo === 'entrada') entrada = horario;
-                if (reg.tipo === 'saida') saida = horario;
-                if (reg.tipo === 'entradaAlmoco') entradaAlmoco = horario;
-                if (reg.tipo === 'saidaAlmoco') saidaAlmoco = horario;
-            });
-
-            if (entrada && saida) {
-                const horaEntrada = new Date(`1970-01-01T${entrada}Z`);
-                const horaSaida = new Date(`1970-01-01T${saida}Z`);
-                totalHoras = (horaSaida - horaEntrada) / (1000 * 60 * 60);
-            }
-
-            doc.text(`${dia}/${mesAno}`, 10, yPosition);
-            doc.text(entrada, 40, yPosition);
-            doc.text(saida, 70, yPosition);
-            doc.text(entradaAlmoco, 100, yPosition);
-            doc.text(saidaAlmoco, 140, yPosition);
-            doc.text(totalHoras.toFixed(2), 170, yPosition);
-            yPosition += 7;
-
-            // Evita ultrapassar o final da página
-            if (yPosition > 280) {
-                doc.addPage();
-                yPosition = 20;
-            }
-        });
-    });
-
-    // Rodapé com Total de Horas
-    yPosition += 10;
-    doc.setFontSize(12);
-    doc.text("Total de Horas Trabalhadas: ", 10, yPosition);
-    // Adicione o cálculo do total de horas trabalhadas aqui
-
-    doc.save('nota_fiscal_ponto_eletronico.pdf');
-}
-</script>
-
+        document.addEventListener('DOMContentLoaded', inicializarEstado);
+    </script>
 </body>
 </html>
