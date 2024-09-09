@@ -115,42 +115,52 @@
         }
 
         function calcularHorasTrabalhadas() {
-            const registrosMensais = JSON.parse(localStorage.getItem('registrosMensais')) || {};
-            const hoje = new Date();
-            const mesAno = `${hoje.getMonth() + 1}-${hoje.getFullYear()}`;
-            const dia = hoje.getDate();
-            const registrosHoje = registrosMensais[mesAno] ? registrosMensais[mesAno][dia] || [] : [];
-            let totalHorasDia = 0;
-            let tempoAlmoco = 0;
-            let totalHorasSemana = parseFloat(localStorage.getItem('totalHorasSemana')) || 0;
+    const registrosMensais = JSON.parse(localStorage.getItem('registrosMensais')) || {};
+    const hoje = new Date();
+    const mesAno = `${hoje.getMonth() + 1}-${hoje.getFullYear()}`;
+    const dia = hoje.getDate();
+    const registrosHoje = registrosMensais[mesAno] ? registrosMensais[mesAno][dia] || [] : [];
+    
+    let totalHorasDia = 0;
+    let tempoAlmoco = 0;
+    let totalHorasSemana = parseFloat(localStorage.getItem('totalHorasSemana')) || 0;
 
-            for (let i = 0; i < registrosHoje.length; i++) {
-                if (registrosHoje[i].tipo === 'entrada' && registrosHoje[i + 1] && registrosHoje[i + 1].tipo === 'saida') {
-                    const entrada = new Date(registrosHoje[i].horario);
-                    const saida = new Date(registrosHoje[i + 1].horario);
-                    totalHorasDia += (saida - entrada) / (1000 * 60 * 60); 
-                } 
-                
-                if (registrosHoje[i].tipo === 'entradaAlmoco' && registrosHoje[i + 1] && registrosHoje[i + 1].tipo === 'saidaAlmoco') {
-                    const entradaAlmoco = new Date(registrosHoje[i].horario);
-                    const saidaAlmoco = new Date(registrosHoje[i + 1].horario);
-                    tempoAlmoco += (saidaAlmoco - entradaAlmoco) / (1000 * 60 * 60); 
-                }
-            }
+    let entradaTrabalho = null;
+    let entradaAlmoco = null;
+    let saidaAlmoco = null;
 
-            const horasTrabalhadasHoje = totalHorasDia - tempoAlmoco;
-            totalHorasSemana += horasTrabalhadasHoje;
+    registrosHoje.forEach((reg, index) => {
+        const horario = new Date(reg.horario);
 
-            localStorage.setItem('totalHorasSemana', totalHorasSemana.toFixed(2));
-
-            if (totalHorasSemana < CARGA_HORARIA_SEMANAL) {
-                alert(`Atenção! Você ainda está devendo horas esta semana.\nTotal de horas trabalhadas: ${totalHorasSemana.toFixed(2)} horas.\nHoras restantes para completar a semana: ${(CARGA_HORARIA_SEMANAL - totalHorasSemana).toFixed(2)} horas.`);
-            } else {
-                alert(`Parabéns! Você completou sua carga horária semanal de ${CARGA_HORARIA_SEMANAL} horas.`);
-            }
-
-            atualizarRegistros();
+        if (reg.tipo === 'entrada') {
+            entradaTrabalho = horario;
+        } else if (reg.tipo === 'saida' && entradaTrabalho) {
+            totalHorasDia += (horario - entradaTrabalho) / (1000 * 60 * 60); // Converte para horas
+            entradaTrabalho = null; // Reset para próximo par
         }
+
+        if (reg.tipo === 'entradaAlmoco') {
+            entradaAlmoco = horario;
+        } else if (reg.tipo === 'saidaAlmoco' && entradaAlmoco) {
+            tempoAlmoco += (horario - entradaAlmoco) / (1000 * 60 * 60); // Converte para horas
+            entradaAlmoco = null; // Reset para próximo par
+        }
+    });
+
+    const horasTrabalhadasHoje = totalHorasDia - tempoAlmoco;
+    totalHorasSemana += horasTrabalhadasHoje;
+
+    localStorage.setItem('totalHorasSemana', totalHorasSemana.toFixed(2));
+
+    if (totalHorasSemana < CARGA_HORARIA_SEMANAL) {
+        alert(`Atenção! Você ainda está devendo horas esta semana.\nTotal de horas trabalhadas: ${totalHorasSemana.toFixed(2)} horas.\nHoras restantes para completar a semana: ${(CARGA_HORARIA_SEMANAL - totalHorasSemana).toFixed(2)} horas.`);
+    } else {
+        alert(`Parabéns! Você completou sua carga horária semanal de ${CARGA_HORARIA_SEMANAL} horas.`);
+    }
+
+    atualizarRegistros();
+}
+
 
         function verificarBotoes() {
             const hoje = new Date();
